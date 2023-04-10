@@ -1,0 +1,264 @@
+#TP - Bee Project
+
+from cmu_112_graphics import *
+import math, random, time
+
+class Bee(object): #super class for all bees
+    def __init__(self,cx,cy):
+        self.x = cx
+        self.y = cy
+        self.pollenInventory = [] #each bee's pollen inevntory
+        self.pollenColors = [] #list of colors in each bee's pollen inventory
+        self.target = None
+        self.timer = 0.5
+
+    def beeTimerFired(self,app):
+        if self.timer == 1:
+            app.leftspriteCounter = (1 + app.leftspriteCounter) % len(app.leftsprites)
+            app.rightspriteCounter = (1 + app.rightspriteCounter) % len(app.rightsprites)
+            self.timer = 0.5
+        if len(app.flowers) == 0:
+            self.target = None
+        else:
+            self.target = self.findTarget(app)
+            if self.target != None:
+                self.target.targeted = True
+                if abs(math.sqrt((self.x-self.target.cx)**2+(self.y-self.target.cy)**2)) <= 10:
+                    pass
+                else:
+                    self.x += (self.target.cx-self.x)/6
+                    self.y += (self.target.cy-self.y)/6
+                    self.timer += 0.25
+
+    def findTarget(self,app): #finds closest and best target to each bee
+        if self.target == None:
+            #best template to calculate best flower
+            bestDist = 10000
+            bestFlower = None
+            for flower in app.flowers:
+                if flower.type == "pollinator":
+                    if flower.gathered == False and flower.targeted == False and flower.color not in self.pollenColors and flower.cy < app.height-70 and flower.cx > 30:
+                        #makes sure flower is ungathered, untargeted, color not already in inventory, and on screen
+                        currDist = math.sqrt((flower.cx-self.x)**2+(flower.cy-self.y)
+                        **2)
+                        if currDist < bestDist:
+                            bestDist = currDist
+                            bestFlower = flower
+                elif flower.type == "pollinate":
+                    if flower.grown == False and flower.targeted == False and flower.color in self.pollenColors and flower.cy < app.height-70 and flower.cx > 30:
+                        #makes sure flower is unpollinated, untargeted, color in pollenInventory, and on screen
+                        currDist = math.sqrt((flower.cx-self.x)**2+(flower.cy-self.y)
+                        **2)
+                        if currDist < bestDist:
+                            bestDist = currDist
+                            bestFlower = flower
+            self.target = bestFlower
+            if self.target != None:
+                self.target.targeted = True
+        else:
+            if (self.target.gathered == True or self.target.grown == True or
+            self.target not in app.flowers): #makes sure current target is valid
+                self.target = None
+                self.findTarget(app) #recursively calls findTarget until a target is returned
+        return self.target
+
+    def drawBee(self,app,canvas):
+        if self.target != None:
+            #next few lines determine which way sprite needs to face
+            if self.target.cx - self.x < 0: 
+                sprite = app.leftsprites[app.leftspriteCounter]
+            elif self.target.cx - self.x >= 0:
+                sprite = app.rightsprites[app.rightspriteCounter]
+            
+        else:
+            sprite = app.leftsprites[app.leftspriteCounter]
+        canvas.create_image(self.x, self.y, image=ImageTk.PhotoImage(sprite))
+    
+    def drawPollen(self,app,canvas): #draws pollen at bee's feet
+        for index in range(len(self.pollenInventory)):
+            object = self.pollenInventory[index]
+            newindex = index/3
+            canvas.create_oval(self.x+15*newindex,self.y+15*newindex,self.x+15*(newindex+1),self.y+15*(newindex+1),
+            fill=object[1])
+
+    def drawPollenInventory(self,app,canvas):
+        pass
+
+class Player(Bee): #subclass of Bee
+    def __init__(self,cx,cy):
+        super().__init__(cx,cy)
+
+    def beeTimerFired(self,app):
+        if self.timer == 1:
+            app.leftspriteCounter = (1 + app.leftspriteCounter) % len(app.leftsprites)
+            app.rightspriteCounter = (1 + app.rightspriteCounter) % len(app.rightsprites)
+            self.timer = 0.5
+        mousex = app.mousex
+        mousey = app.mousey
+
+        if abs(self.x-mousex) >= 1 and abs(self.y-mousey) >= 1:
+            self.x += (mousex-self.x)/6
+            self.y += (mousey-self.y)/6
+            self.timer += 0.25
+            #distance dependent movement towards mosue
+    
+    def drawBee(self,app,canvas):
+        #different from super class because location is based on mouse, not target
+        if app.mousex - self.x < 0:
+            sprite = app.leftsprites[app.leftspriteCounter]
+        elif app.mousex - self.x >= 0:
+            sprite = app.rightsprites[app.rightspriteCounter]
+        canvas.create_image(self.x, self.y, image=ImageTk.PhotoImage(sprite))
+
+    def drawPollenInventory(self,app,canvas): #draws player bee's pollenInventory in left corner
+        for index in range(len(self.pollenInventory)):
+            object = self.pollenInventory[index]
+            canvas.create_oval(50+30*index,50,50+30*(index+1),80,
+            outline=object[1],width=10)
+
+class Flower(object):
+    def __init__(self,cx,cy,color,type):
+        self.cx = cx
+        self.cy = cy
+        self.color = color
+        self.type = type
+        self.grown = False
+        self.gathered = False
+        self.xchange = random.randrange(20,30) 
+        self.ychange = random.randrange(1,6)/100
+        self.targeted = False #indicates if a flower has already been a target
+        self.maxSize = 3
+        self.r = 1
+        self.timer = 0
+
+    def drawFlower(self,canvas):
+        newx = self.cx + self.xchange*math.sin(self.ychange*self.cy)
+        # allows for left and right movement of flowers
+        # ^^ TA helped with this at OH
+        if self.type == "pollinator":
+            if self.gathered == False:
+                canvas.create_oval(newx-20,self.cy-20,newx+20,self.cy+20,
+                fill=self.color)
+            elif self.gathered == True and self.grown == False:
+                canvas.create_oval(newx-20,self.cy-20,newx+20,self.cy+20,
+                outline=self.color,width=15)
+            elif self.gathered == True and self.grown == True:
+                canvas.create_oval(newx-3*20,self.cy-3*20,newx+3*
+                20,self.cy+3*20,outline=self.color,width=9)
+        elif self.type == "pollinate":
+            if self.grown == False:
+                canvas.create_oval(newx-20,self.cy-20,newx+20,self.cy+20,
+                outline=self.color,width=3)
+                canvas.create_oval(newx-15,self.cy-15,newx+15,self.cy+15,
+                fill=self.color)
+            else:
+                #gradual growth
+                canvas.create_oval(self.cx-self.r*20,self.cy-self.r*20,self.cx+self.r*20,
+                self.cy+self.r*20,outline=self.color,width=9)
+                canvas.create_oval(self.cx-self.r*15,self.cy-self.r*15,self.cx+self.r*15,self.cy+self.r*15,
+                fill=self.color)
+                
+    def flowerTimerFired(self):
+        self.timer += 1
+        if self.cy >= -80:
+            self.cy -= 5
+        if self.timer >= 10: #gradual growth of flower
+            if self.r != self.maxSize and self.grown == True:
+                self.r += 0.25
+            self.timer = 0         
+            
+def splashScreenMode_redrawAll(app,canvas):
+    #https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#usingModes
+    font = 'Arial 26 bold'
+    canvas.create_text(app.width/2,app.height/2-100,
+    text="Welcome to the Bee Game!",font=font,fill="Black")
+    canvas.create_text(app.width/2,app.height/2-50,
+    text="Collect pollen and pollinate flowers!",font=font,fill="Black")
+    canvas.create_text(app.width/2,app.height/2,
+    text="Press any key to continue!",font=font,fill="Black")
+
+def splashScreenMode_keyPressed(app,event):
+    app.mode = 'gameMode'
+
+def appStarted(app):
+    app.mode = 'splashScreenMode'
+    app.cx = app.width/2
+    app.cy = app.height/2
+    app.mousex = 0
+    app.mousey = 0
+    spritestrip = app.loadImage('bee-removebg.png')
+    #https://www.artstation.com/artwork/4r4Q4
+    spritestrip = app.scaleImage(spritestrip,1/2)
+    spritew, spriteh = spritestrip.size
+    eachw = spritew/5
+    app.leftsprites = [] #for left direction
+    app.rightsprites = [] #for right direction
+    #https://www.cs.cmu.edu/~112/notes/notes-animations-part4.html#spritesheetsWithCropping
+    for i in range(5):
+        sprite = spritestrip.crop((eachw*i,0,eachw*(i+1),spriteh))
+        app.leftsprites.append(sprite)
+        app.rightsprites.append(sprite.transpose(Image.FLIP_LEFT_RIGHT))
+    app.leftspriteCounter, app.rightspriteCounter = 0, 0
+    app.player = Player(app.cx,app.cy)
+    app.bees = [Bee(app.cx-200, app.cy),Bee(app.cx+200,app.cy),app.player] 
+    app.flowers = []
+    app.toRemove = []
+    app.timer = random.randrange(1,3)
+    app.timerDelay = 40
+
+def gameMode_mouseMoved(app,event): #gets mouse coordinates
+    app.mousex = event.x
+    app.mousey = event.y
+
+def gameMode_createFlower(app): #generates a random flower in timerFired
+    flowerTypes = ["pollinator","pollinate"]
+    flowerColors = ["red","orange","yellow","green","blue","purple"]
+    randx = random.randrange(0,app.width)
+    app.flowers.append(Flower(randx,app.height,random.choice(flowerColors)
+    ,random.choice(flowerTypes)))
+
+def gameMode_timerFired(app):
+    app.timer += 1
+    for bee in app.bees:
+        bee.beeTimerFired(app)
+    if app.timer == 8: #creates flowers periodically
+        gameMode_createFlower(app)
+        app.timer = random.randrange(1,3)
+    for flower in app.flowers:
+        flower.flowerTimerFired()
+        if flower.cy <= -80 or flower.cx <= -80 or flower.cx >= app.width:
+            app.toRemove.append(flower)
+        for flower in app.toRemove: #removes flowers that have gone off screen
+            app.flowers.remove(flower)
+            app.toRemove.remove(flower)
+        for bee in app.bees:
+            if abs(math.sqrt((bee.x-flower.cx)**2+(bee.y-flower.cy)**2)) <= 50:
+                flower.targeted = True
+                if flower.type == "pollinator":
+                    if flower.gathered != True:
+                        bee.pollenInventory.append((flower,flower.color)) #adds flower and color to inventory
+                        bee.pollenColors.append(flower.color) 
+                        flower.gathered = True
+                elif flower.type == "pollinate":
+                    for (flowerObject, flowerColor) in bee.pollenInventory:
+                        if flower.color == flowerColor: #checks if matching pollen is in inventory
+                            flowerObject.grown = True
+                            if flower.grown != True:
+                                flower.grown = True
+                            break    
+
+def gameMode_redrawAll(app,canvas):
+    canvas.create_rectangle(0,0,app.width,app.height,fill="light blue")
+    #background
+    for bee in app.bees:
+        bee.drawBee(app,canvas)
+        if len(bee.pollenInventory) <= 6:
+            bee.drawPollenInventory(app,canvas)
+            bee.drawPollen(app,canvas)
+        else: #keeps maximum size of inventory at 6
+            bee.pollenInventory.pop(0)
+            bee.pollenColors.pop(0)
+    for flower in app.flowers:
+        flower.drawFlower(canvas)
+
+runApp(width=1600, height=800, title = "Not to Bee Game :)")
